@@ -84,14 +84,18 @@ pub struct Platform {
         VirtualMuxAlarm<'static, Rtc<'static>>,
     >,
     ieee802154_radio: Option<&'static capsules::ieee802154::RadioDriver<'static>>,
-    button: &'static capsules::button::Button<'static, nrf52::gpio::GPIOPin>,
+    button: &'static capsules::button::Button<'static>,
     pconsole: &'static capsules::process_console::ProcessConsole<
         'static,
         components::process_console::Capability,
     >,
+	loraconsole: &'static capsules::lora_console::LoraConsole<
+        'static,
+        components::lora_console::Capability,
+    >,
     console: &'static capsules::console::Console<'static>,
-    gpio: &'static capsules::gpio::GPIO<'static, nrf52::gpio::GPIOPin>,
-    led: &'static capsules::led::LED<'static, nrf52::gpio::GPIOPin>,
+    gpio: &'static capsules::gpio::GPIO<'static>,
+    led: &'static capsules::led::LED<'static>,
     rng: &'static capsules::rng::RngDriver<'static>,
     temp: &'static capsules::temperature::TemperatureSensor<'static>,
     ipc: kernel::ipc::IPC,
@@ -140,15 +144,15 @@ pub unsafe fn setup_board<I: nrf52::interrupt_service::InterruptService>(
     board_kernel: &'static kernel::Kernel,
     button_rst_pin: Pin,
     gpio_port: &'static nrf52::gpio::Port,
-    gpio: &'static capsules::gpio::GPIO<'static, nrf52::gpio::GPIOPin>,
+    gpio: &'static capsules::gpio::GPIO<'static>,
     debug_pin1_index: Pin,
     debug_pin2_index: Pin,
     debug_pin3_index: Pin,
-    led: &'static capsules::led::LED<'static, nrf52::gpio::GPIOPin>,
+    led: &'static capsules::led::LED<'static>,
     uart_channel: UartChannel<'static>,
     spi_pins: &SpiPins,
     mx25r6435f: &Option<SpiMX25R6435FPins>,
-    button: &'static capsules::button::Button<'static, nrf52::gpio::GPIOPin>,
+    button: &'static capsules::button::Button<'static>,
     ieee802154: bool,
     app_memory: &mut [u8],
     process_pointers: &'static mut [Option<&'static dyn kernel::procs::ProcessType>],
@@ -224,6 +228,8 @@ pub unsafe fn setup_board<I: nrf52::interrupt_service::InterruptService>(
     // functions.
     let process_management_capability =
         create_capability!(capabilities::ProcessManagementCapability);
+	 let lora_management_capability =
+        create_capability!(capabilities::LoraManagementCapability);
     let main_loop_capability = create_capability!(capabilities::MainLoopCapability);
     let memory_allocation_capability = create_capability!(capabilities::MemoryAllocationCapability);
 
@@ -273,6 +279,9 @@ pub unsafe fn setup_board<I: nrf52::interrupt_service::InterruptService>(
 
     let pconsole =
         components::process_console::ProcessConsoleComponent::new(board_kernel, uart_mux)
+            .finalize(());
+	let loraconsole =
+        components::lora_console::LoraConsoleComponent::new(board_kernel, uart_mux)
             .finalize(());
 
     // Setup the console.
@@ -401,7 +410,7 @@ pub unsafe fn setup_board<I: nrf52::interrupt_service::InterruptService>(
     );
     let analog_comparator = static_init!(
         analog_comparator::AnalogComparator<'static, nrf52::acomp::Comparator>,
-        analog_comparator::AnalogComparator::new(&nrf52::acomp::ACOMP, ac_channels)
+        analog_comparator::AnalogComparator::new(&mut nrf52::acomp::ACOMP, ac_channels)
     );
     nrf52::acomp::ACOMP.set_client(analog_comparator);
 
@@ -422,6 +431,7 @@ pub unsafe fn setup_board<I: nrf52::interrupt_service::InterruptService>(
         ble_radio: ble_radio,
         ieee802154_radio: ieee802154_radio,
         pconsole: pconsole,
+		loraconsole:loraconsole,
         console: console,
         led: led,
         gpio: gpio,
@@ -432,8 +442,10 @@ pub unsafe fn setup_board<I: nrf52::interrupt_service::InterruptService>(
         nonvolatile_storage: nonvolatile_storage,
         ipc: kernel::ipc::IPC::new(board_kernel, &memory_allocation_capability),
     };
-
-    platform.pconsole.start();
+	
+	platform.loraconsole.start();
+    //platform.pconsole.start();
+	
     debug!("Initialization complete. Entering main loop\r");
     debug!("{}", &nrf52::ficr::FICR_INSTANCE);
 

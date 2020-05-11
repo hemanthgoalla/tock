@@ -50,6 +50,8 @@
 /// otherwise managing processes.
 pub unsafe trait ProcessManagementCapability {}
 
+pub unsafe trait LoraManagementCapability {}
+
 /// The `MainLoopCapability` capability allows the holder to start executing
 /// the main scheduler loop in Tock.
 pub unsafe trait MainLoopCapability {}
